@@ -4,6 +4,7 @@ import spacy
 import numpy as np
 #from keras.preprocessing.sequence import pad_sequences
 #from collections import Counter
+from datetime import timedelta
 import time
 import pickle
 import csv
@@ -12,31 +13,10 @@ UNKNOWN = '<UNK>'
 PADDING = '<PAD>'
 
 
-def feed_data(premise, premise_mask, hypothesis, hypothesis_mask, y_batch,
-              dropout_keep_prob):
-    feed_dict = {model.premise: premise,
-                 model.premise_mask: premise_mask,
-                 model.hypothesis: hypothesis,
-                 model.hypothesis_mask: hypothesis_mask,
-                 model.y: y_batch,
-                 model.dropout_keep_prob: dropout_keep_prob}
-    return feed_dict
-
-
-def init_embeddings(vocab, embedding_dims):
-    rng = np.random.RandomState(seed = 22)
-    random_init_embeddings = rng.normal(size = (len(vocab), embedding_dims))
-    return random_init_embeddings.astype(np.float32)
-
-def load_embeddings(path, vocab):
-    with open(path, 'rb') as fin:
-        _embeddings, _vocab = pickle.load(fin)
-    embedding_dims = _embeddings.shape[1]
-    embeddings = init_embeddings(vocab, embedding_dims)
-    for word, id in vocab.items():
-        if word in _vocab:
-            embeddings[id] = _embeddings[_vocab[word]]
-    return embeddings.astype(np.float32)
+def get_time_diff(start_time):
+    end_time = time.time()
+    diff = end_time - start_time
+    return timedelta(seconds = int(round(diff)))
 
 
 def read_data(dataPath):
@@ -85,7 +65,7 @@ def token2Index(question, word2Index, glove_emb, question_emb):
     for i in range(len(question)):
         if question[i] not in word2Index:
             if question[i] in glove_emb:
-                word2Index[question[i]] = len[word2Index]
+                word2Index[question[i]] = len(word2Index)
                 question_emb.append(glove_emb[question[i]])
             else:
                 question[i] = UNKNOWN
@@ -126,6 +106,11 @@ def preprocess_data(data_path, glove_path, emb_dim):
     with open('data/data_emb', 'wb') as f:
         pickle.dump((question_data, question_emd, word2Index), f)
     print('Saved.')
+
+def load_prepocess_data(data_path):
+    with open(data_path, 'rb') as f:
+        question_data, question_emd, word2Index = pickle.load(f)
+        return question_data, question_emd, word2Index
 
 def main():
     data_path = os.path.join(os.path.expanduser('~'), 'code/nlp/DQD_model/data/train_dqd.csv')
