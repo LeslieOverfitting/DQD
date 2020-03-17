@@ -32,6 +32,8 @@ def train_model(train_data_loader, test_data_loader, model, config):
                 dev_acc, dev_loss = evaluate(test_data_loader, model, flag=False)
                 if dev_loss < dev_best_loss:
                     improve = '*'
+                    dev_best_loss = dev_loss
+                    torch.save(model.state_dict(), config.model_save_path)
                 else:
                     improve = ' '
                 time_diff = get_time_diff(start_time)
@@ -50,7 +52,7 @@ def evaluate(test_data_loader, model, flag=False):
         for inputs, labels in test_data_loader:
             outputs = model(inputs)
             loss = F.cross_entropy(outputs, labels)
-            loss_total += loss.time()
+            loss_total += loss.item()
             predict = torch.max(outputs, dim=1)[1].cpu().numpy()
             labels = labels.data.cpu().numpy()
             labels_all = np.append(labels_all,labels)
