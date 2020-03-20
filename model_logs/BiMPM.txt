@@ -1,0 +1,27 @@
+BIMPM(
+  (dropout): Dropout(p=0.4, inplace=False)
+  (encoder): Embedding(68547, 300, padding_idx=0)
+  (context_lstm): LSTM(300, 300, num_layers=2, batch_first=True, bidirectional=True)
+  (matching_layer): MatchingLayer(
+    (W): ParameterList(
+        (0): Parameter containing: [torch.FloatTensor of size 4x300]
+        (1): Parameter containing: [torch.FloatTensor of size 4x300]
+        (2): Parameter containing: [torch.FloatTensor of size 4x300]
+        (3): Parameter containing: [torch.FloatTensor of size 4x300]
+        (4): Parameter containing: [torch.FloatTensor of size 4x300]
+        (5): Parameter containing: [torch.FloatTensor of size 4x300]
+        (6): Parameter containing: [torch.FloatTensor of size 4x300]
+        (7): Parameter containing: [torch.FloatTensor of size 4x300]
+    )
+  )
+  (aggregation_lstm): LSTM(32, 4, num_layers=2, batch_first=True, bidirectional=True)
+  (mlp): Sequential(
+    (0): Dropout(p=0.4, inplace=False)
+    (1): Linear(in_features=16, out_features=8, bias=True)
+    (2): Tanh()
+    (3): Dropout(p=0.4, inplace=False)
+    (4): Linear(in_features=8, out_features=2, bias=True)
+  )
+)
+epoch[1/10]
+训练尚未完成
