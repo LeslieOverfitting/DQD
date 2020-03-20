@@ -5,6 +5,7 @@ class Config(object):
         self.data_file_path = 'data/train_dqd.csv'
         self.word_emb_path = 'data/word_emb'
         self.word2Index_path = 'data/word2Index'
+        self.model_save_path = 'save_model/esim'
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         #model
         self.n_vocab = 0
@@ -14,12 +15,12 @@ class Config(object):
         self.emb_dim = 300
         self.padding_idx = 0
         self.hidden_size = 300
-        self.dropout = 0.15
-        self.lstm_layer = 0.15
+        self.dropout = 0.5
+        self.hidden_layer = 2
 
         # train
-        self.learn_rate = 1e-5
-        self.epochs_num = 10
+        self.learn_rate = 4e-4
+        self.epochs_num = 15
 
 
 

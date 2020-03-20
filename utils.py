@@ -64,3 +64,21 @@ def get_time_diff(start_time):
     end_time = time.time()
     time_diff = end_time - start_time
     return timedelta(seconds=int(round(time_diff)))
+
+
+def init_model_weights(module):
+    """
+    Initialise the weights of the inferSent model.
+    """
+    if isinstance(module, nn.Linear):
+        nn.init.xavier_uniform_(module.weight.data)
+        nn.init.constant_(module.bias.data, 0.0)
+
+    elif isinstance(module, nn.LSTM):
+        for name, param in module.named_parameters():
+            if 'weight_ih' in name:
+                torch.nn.init.xavier_uniform_(param.data)
+            elif 'weight_hh' in name:
+                torch.nn.init.xavier_uniform_(param.data)
+            elif 'bias' in name:
+                param.data.fill_(0)

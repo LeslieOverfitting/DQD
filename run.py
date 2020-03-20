@@ -1,5 +1,7 @@
 from models.biMPM import BIMPM
 from models.esim import ESIM
+from models.sse import SSE
+from models.inferSent import InferSent
 from dataset_iterator import DatasetIterator
 import train
 from config import Config
@@ -14,6 +16,10 @@ if __name__ == '__main__':
     config.n_vocab = len(word_emb)
     train_iterator = DatasetIterator(train_data, config.batch_size, config.device)
     test_iterator = DatasetIterator(test_data, config.batch_size, config.device)
-    model = ESIM(config.n_vocab, config.hidden_size, config.emb_dim, word_emb, config.n_classes, config.padding_idx, config.dropout, config.lstm_layer, config.device)
+    #model = ESIM(config, word_emb)
+    #model = InferSent(config, word_emb)
+    #model = SSE(config, word_emb)
+    model = BIMPM(config, word_emb, 4)
     model.to(config.device)
+    print(model)
     train.train_model(train_iterator, test_iterator, model, config)

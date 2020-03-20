@@ -61,15 +61,15 @@ def evaluate(test_data_loader, model, flag=False):
     if flag:
         report = metrics.classification_report(labels_all, predict_all, digits=4)
         confusion = metrics.confusion_matrix(labels_all, predict_all)
-        return acc, loss_total / len(predict_all), report, confusion
+        return acc, loss_total / len(test_data_loader) , report, confusion
     else:
-        return acc,  loss_total / len(predict_all)
+        return acc,  loss_total / len(test_data_loader)
 
 def test_model(test_data_loader, model, config):
     model.load_state_dict(torch.load(config.model_save_path))
     model.eval()
     start_time = time.time()
-    test_acc, test_loss, test_report, test_confusion = evaluate(test_data_loader, model, config, test=True)
+    test_acc, test_loss, test_report, test_confusion = evaluate(test_data_loader, model, flag=True)
     msg = "Test Loss:{0:>5.2}, Test Acc:{1:>6.2%}"
     print(msg.format(test_loss, test_acc))
     print("Precision, Recall and F1-Score...")
