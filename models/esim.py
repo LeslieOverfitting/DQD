@@ -1,173 +1,88 @@
-import tensorflow as tf 
-from tensorflow.contrib.rnn import LSTMCell, DropoutWrapper
+import torch 
+import torch.nn as nn
+import torch.nn.functional as F
+from utils import sort_by_seq_lens, get_mask, masked_softmax, weighted_sum, replace_masked, init_model_weights
+from models.seq2SeqEncoder import Seq2SeqEncoder
 
-class ESIM(object):
-    
-    def __init__(self, seq_length, n_vocab, embedding_size, hidden_size, attention_size, classes_num, batch_size, learning_rate, optimizer, l2, clip_value, emd_matrix):
-        self._parameter_init(seq_length, n_vocab, embedding_size, hidden_size, attention_size, classes_num, batch_size, learning_rate, optimizer, l2, clip_value, emd_matrix)
-        self._placeholder_init()
-        self._y_pred = self._forward()
-        self.loss = self._get_loss()
-        self.acc = self._get_acc()
-        self.train = self._get_train()
+# widely inspired from https://github.com/coetaur0/ESIM/tree/e905a2f2891c64613b2d6d46635504bd2827f1e3
 
-        tf.add_to_collection('train_mini', self.train)
+class ESIM(nn.Module):
 
-    def _parameter_init(self, seq_length, n_vocab, embedding_size, hidden_size, attention_size, classes_num, batch_size, learning_rate, optimizer, l2, clip_value, embedding_matrix):
-        self._seq_length = seq_length
-        self._n_vocab = n_vocab
-        self._embedding_size = embedding_size
-        self._hidden_size = hidden_size
-        self._attention_size = attention_size
-        self._batch_size = batch_size
-        self._learning_rate = learning_rate
-        self._optimizer = optimizer
-        self._l2 = l2
-        self._clip_value = clip_value
-        self._classes_num = classes_num
-        self._embedding_matrix = embedding_matrix
+    def __init__(self, config, word_emb):
+        super(ESIM, self).__init__()
+        self.n_vocab = config.n_vocab
+        self.hidden_size = config.hidden_size
+        self.emb_dim = config.emb_dim
+        self.word_emb = word_emb
+        self.n_classes = config.n_classes
+        self.padding_idx = config.padding_idx
+        self.dropout = config.dropout
+        self.hidden_layer = config.hidden_layer
+        self.device = config.device
+        self.encoder = nn.Embedding(self.n_vocab, self.emb_dim, padding_idx=self.padding_idx)
+        if self.word_emb is not None:
+            self.encoder.weight.data.copy_(self.word_emb)
+        self._encodding = Seq2SeqEncoder(self.emb_dim, self.hidden_size,  num_layers=self.hidden_layer, bias=True, dropout=self.dropout)
 
-    def _placeholder_init(self):
-        self.premise = tf.placeholder(tf.int32, [None, self._seq_length], 'premise') # equal to question_1 in DQD
-        self.hypothesis = tf.placeholder(tf.int32, [None, self._seq_length], 'hypothesis')
-        self.y = tf.placeholder(tf.float32, [None], 'y_true')
-        self.premise_mask = tf.placeholder(tf.int32, [None], 'premise_actual_length')
-        self.hypothesis_mask = tf.placeholder(tf.int32, [None], 'hypothesis_actual_length')
-        #self.embedding_matrix = tf.placeholder(tf.float32,[self._n_vocab, self._embedding_size], 'embedding_matrix')
-        self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
+        self._projection = nn.Sequential(nn.Linear(4 * 2 * self.hidden_size, self.hidden_size),
+                                        nn.ReLU())
 
-    def _forward(self):
-        a_bar, b_bar = self._inputEncoding('input_encoding')
-        m_a, m_b = self._localInference(a_bar, b_bar, 'local_inference')
-        y_pred = self._inferenceComposition(m_a, m_b, 'inference_composition')
-        return y_pred
+        self._composition_lstm = Seq2SeqEncoder(self.hidden_size, self.hidden_size, num_layers=self.hidden_layer, bias=True, dropout=self.dropout)
+        self._predict_fc = nn.Sequential(nn.Dropout(p=self.dropout),
+                                            nn.Linear(4 * 2 * self.hidden_size, self.hidden_size),
+                                            nn.Tanh(),
+                                            nn.Dropout(p=self.dropout),
+                                            nn.Linear(self.hidden_size, self.n_classes)
+                                            )
+        self.apply(init_model_weights)
 
-    def _get_loss(self, l2_lambda = 0.0001):
-        with tf.name_scope('cost'):
-            cross_entropy = -self.y * tf.log(self._y_pred) - (1 - self.y) * tf.log(1 - self._y_pred)
-            loss = tf.reduce_mean(cross_entropy)
-            weights = [v for v in tf.trainable_variables() if ('w' in v.name) or ('kernel' in v.name)]
-            l2_loss = tf.add_n([tf.nn.l2_loss(w) for w in weights]) * l2_lambda
-            loss += l2_loss
-        return loss
-    
-    def _get_acc(self):
-        with tf.name_scope('acc'):
-            label_pred = tf.round(self._y_pred, name='label_pred')
-            correct_pred = tf.equal(tf.cast(label_pred, tf.int32), tf.cast(self.y, tf.int32))
-            accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32), name='Accuracy')
-        return accuracy
-
-    def _get_train(self):
-        with tf.name_scope('training'):
-            if self._optimizer == 'adam':
-                optimizer = tf.train.AdamOptimizer(self._learning_rate)
-            elif self._optimizer == 'rmsprop':
-                optimizer = tf.train.RMSPropOptimizer(self._learning_rate)
-            elif self._optimizer == 'momentum':
-                optimizer = tf.train.MomentumOptimizer(self._learning_rate, momentum=0.9)
-            elif self._optimizer == 'sgd':
-                optimizer = tf.train.GradientDescentOptimizer(self._learning_rate)
-            elif self._optimizer == 'adadelta':
-                optimizer = tf.train.AdadeltaOptimizer(self._learning_rate)
-            elif self._optimizer == 'adagrad':
-                optimizer = tf.train.AdagradOptimizer(self._learning_rate)
-            else:
-                ValueError('Unknown optimizer : {0}'.format(self._optimizer))
-        gradients, v = zip(*optimizer.compute_gradients(self.loss))
-        if self._clip_value is not None:
-            gradients, _ = tf.clip_by_global_norm(gradients, self._clip_value)
-        train_op = optimizer.apply_gradients(zip(gradients, v))
-        return train_op
-
-
-    def _inputEncoding(self, scope):
-        # 3.1 Input Encoding
-        # get sentence embedding
-        with tf.device('/cpu:0'):
-            #self._Embedding = tf.get_variable('Embedding', [self.n_vocab, self.embedding_size], tf.float32)
-            self._embedded_left = tf.nn.embedding_lookup(self._embedding_matrix, self.premise)
-            self._embedded_right = tf.nn.embedding_lookup(self._embedding_matrix, self.hypothesis)
+    def forward(self,inputs):
+        """
+            question1s [batch, max_len, dim]
+            question1_lengths [batch, len] 
+            question2s [batch, max_len, dim]
+            question2_lengths [batch, len]
+        """
+        question1s, question1_lengths, question2s, question2_lengths = inputs
+        # input encoding
+        q1_mask = get_mask(question1s, question1_lengths).to(self.device) # [batch_size, len] 
+        q2_mask = get_mask(question2s, question2_lengths).to(self.device)
         
-        # a¯i = BiLSTM(a, i), ∀i ∈ [1, . . . , `a], (1)
-        # b¯j = BiLSTM(b, j), ∀j ∈ [1, . . . , `b]. (2)
-        with tf.variable_scope(scope):
-            output_premise, final_state_premise = self._biLSTM(self._embedded_left,  self._hidden_size, 'biLstm', self.premise_mask)
-            output_hypothesis, final_state_hypothesis = self._biLSTM(self._embedded_right,  self._hidden_size, 'biLstm', self.hypothesis_mask, True)
-            a_bar = tf.concat(output_premise, axis=2)
-            b_bar = tf.concat(output_hypothesis, axis=2)
-            return a_bar, b_bar
+        embedded_q1 = self.encoder(question1s)
+        embedded_q2 = self.encoder(question2s)
+        encoded_q1 = self._encodding(embedded_q1, question1_lengths) # [batch_size, max_len_q1, dim]
+        encoded_q2 = self._encodding(embedded_q2, question2_lengths) # [batch_size, max_len_q2, dim]
+        # local inference
+        # e_ij = a_i^Tb_j  (11)
+        similarity_matrix = encoded_q1.bmm(encoded_q2.transpose(2, 1).contiguous()) # [batch_size, max_len_q1, max_len_q2]
+        q1_q2_atten = masked_softmax(similarity_matrix, q2_mask)  # [batch_size, max_len_q1, max_len_q2]
+        q2_q1_atten = masked_softmax(similarity_matrix.transpose(2, 1).contiguous(), q1_mask)
+        
+        # eij * bj
+        a_hat = weighted_sum(encoded_q1, q1_q2_atten, q1_mask) # [batch_size, max_len_q1, dim]
+        b_hat = weighted_sum(encoded_q2, q2_q1_atten, q2_mask) # [batch_size, max_len_q2, dim]
 
-    def _localInference(self, a_bar, b_bar,scope):
-        # 3.2 Local Inference Modeling
-        with tf.variable_scope(scope):
-            attention_weight = tf.matmul(a_bar, tf.transpose(b_bar, [0, 2, 1]))
-            # softmax
-            attention_soft_a = tf.nn.softmax(attention_weight)
-            attention_soft_b = tf.nn.softmax(tf.transpose(attention_weight, [0, 2, 1]))
+        # Enhancement of local inference information
+        # ma = [a¯; a~; a¯ − a~; a¯ a~];
+        # mb = [b¯; b~; b¯ − b~; b¯ b~]
+        m_a = torch.cat([encoded_q1, a_hat, encoded_q1 - a_hat, encoded_q1 * a_hat], dim=-1) # [batch_size, max_len_q1, 4 * dim]
+        m_b = torch.cat([encoded_q2, b_hat, encoded_q2 - b_hat, encoded_q2 * b_hat], dim=-1)
 
-            a_hat = tf.matmul(attention_soft_a, b_bar)
-            b_hat = tf.matmul(attention_soft_b, a_bar)
+        # 3.3 Inference Composition
+        projected_q1 = self._projection(m_a)  # [batch_size, max_len_q1, dim]
+        projected_q2 = self._projection(m_b)  # [batch_size, max_len_q2, dim]
+        v_a = self._composition_lstm(projected_q1, question1_lengths) # [batch_size, max_len_q1, dim]
+        v_b = self._composition_lstm(projected_q2, question2_lengths) # [batch_size, max_len_q2, dim]
+        v_a_avg = torch.sum(v_a * q1_mask.unsqueeze(1).transpose(2, 1), dim=1)  \
+                   / torch.sum(q1_mask, dim=1, keepdim = True) # q1_mask batch_size, 1, max_len_q1
+        v_b_avg = torch.sum(v_b * q2_mask.unsqueeze(1).transpose(2, 1), dim=1) \
+                   / torch.sum(q2_mask, dim=1, keepdim = True)
+        v_a_max, _ = replace_masked(v_a, q1_mask, -1e7).max(dim=1) # [batch_size, dim]
+        v_b_max, _ = replace_masked(v_b, q2_mask, -1e7).max(dim=1)
 
-            # m_a = [a_bar, a_hat, a_bar - a_hat, a_bar 'dot' a_hat] (14)
-            # m_b = [b_bar, b_hat, b_bar - b_hat, b_bar 'dot' b_hat] (15)
+        v = torch.cat([v_a_avg, v_a_max, v_b_avg, v_b_max], dim=1) # [batch_size, dim * 4]
 
-            a_diff = tf.subtract(a_bar, a_hat)
-            b_diff = tf.subtract(b_bar, b_hat)
+        logits = self._predict_fc(v)
+        return logits
 
-            a_mul = tf.multiply(a_bar, a_hat)
-            b_mul = tf.multiply(b_bar, b_hat)
-
-            m_a = tf.concat([a_bar, a_hat, a_diff, a_mul], axis = 2)
-            m_b = tf.concat([b_bar, b_hat, b_diff, b_mul], axis = 2)
-
-            return m_a, m_b
-
-    def _inferenceComposition(self, m_a, m_b, scope):
-        # 3.3 inferenceComposition
-        with tf.variable_scope(scope):
-            outputV_a, finalStateV_a = self._biLSTM(m_a, self._hidden_size, 'biLSTM2')
-            outputV_b, finalStateV_b = self._biLSTM(m_b, self._hidden_size, 'biLSTM2', isReuse = True)
-            v_a = tf.concat(outputV_a, axis = 2) # (batch_size, seq_length, 2 * hidden_size)
-            v_b = tf.concat(outputV_b, axis = 2)
-
-            # get average
-            v_a_avg = tf.reduce_mean(v_a, axis = 1) # (batch_size, 2 * hidden_size)
-            v_b_avg = tf.reduce_mean(v_b, axis = 1)
-
-            # get max
-            v_a_max = tf.reduce_max(v_a, axis = 1) # (batch_size, 2 * hidden_size)
-            v_b_max = tf.reduce_max(v_b, axis = 1)
-            
-            # v = [v_{a,avg}; v_{a,max}; v_{b,avg}; v_{b_max}] (20)
-            v = tf.concat([v_a_avg, v_a_max, v_b_avg, v_b_max], axis = 1)
-
-            y_hat = self._finalMultilayer(v, self._hidden_size, self._classes_num, 'final_multilayer')
-            return y_hat
-
-    def  _finalMultilayer(self, inputs, hidden_dims, num_units, scope, isReuse = False, initializer = None):
-        with tf.variable_scope(scope):
-            if initializer is None:
-                initializer = tf.random_normal_initializer(0.0, 0.1)
-
-            with tf.variable_scope('hidden_layer1'):
-                inputs = tf.nn.dropout(inputs, self.dropout_keep_prob)
-                hidden_outputs = tf.layers.dense(inputs, hidden_dims, tf.nn.relu, kernel_initializer = initializer)
-            
-            with tf.variable_scope('output_layer2'):
-                hidden_outputs = tf.nn.dropout(hidden_outputs, self.dropout_keep_prob)
-                result = tf.layers.dense(hidden_outputs, num_units, tf.nn.sigmoid, kernel_initializer = initializer)
-                return result
-
-    def _biLSTM(self, inputs, num_units, scope, seq_length = None, isReuse = False):
-        with tf.variable_scope(scope, reuse = isReuse):
-            lstm_cell = LSTMCell(num_units = num_units)
-            forward_lstm_cell = DropoutWrapper(lstm_cell, output_keep_prob = self.dropout_keep_prob)
-            backward_lstm_cell = DropoutWrapper(lstm_cell, output_keep_prob = self.dropout_keep_prob)
-            output = tf.nn.bidirectional_dynamic_rnn(cell_fw = forward_lstm_cell,
-                                                     cell_bw = backward_lstm_cell,
-                                                     inputs = inputs,
-                                                     sequence_length = seq_length,
-                                                     dtype = tf.float32)
-            return output
 
