@@ -1,39 +1,40 @@
 import torch 
 import torch.nn as nn
 import torch.nn.functional as F
-from utils import sort_by_seq_lens, get_mask, masked_softmax, weighted_sum, replace_masked
+from utils import sort_by_seq_lens, get_mask, masked_softmax, weighted_sum, replace_masked, init_model_weights
+from models.seq2SeqEncoder import Seq2SeqEncoder
 
 # widely inspired from https://github.com/coetaur0/ESIM/tree/e905a2f2891c64613b2d6d46635504bd2827f1e3
 
 class ESIM(nn.Module):
 
-    def __init__(self, vocab_num, hidden_size, emb_dim, word_emb, n_classes, padding_idx = 0,dropout = 0.3, lstm_layer = 2, device ='cpu'):
+    def __init__(self, config, word_emb):
         super(ESIM, self).__init__()
-        self.vocab_num = vocab_num
-        self.hidden_size = hidden_size
-        self.emb_dim = emb_dim
+        self.n_vocab = config.n_vocab
+        self.hidden_size = config.hidden_size
+        self.emb_dim = config.emb_dim
         self.word_emb = word_emb
-        self.n_classes = n_classes
-        self.padding_idx = padding_idx
-        self.dropout = dropout
-        self.lstm_layer = lstm_layer
-        self.device = device
-        self.encoder = nn.Embedding(self.vocab_num, self.emb_dim, padding_idx=self.padding_idx)
+        self.n_classes = config.n_classes
+        self.padding_idx = config.padding_idx
+        self.dropout = config.dropout
+        self.hidden_layer = config.hidden_layer
+        self.device = config.device
+        self.encoder = nn.Embedding(self.n_vocab, self.emb_dim, padding_idx=self.padding_idx)
         if self.word_emb is not None:
             self.encoder.weight.data.copy_(self.word_emb)
-        self._encodding = Seq2SeqEncoder(self.emb_dim, self.hidden_size)
+        self._encodding = Seq2SeqEncoder(self.emb_dim, self.hidden_size,  num_layers=self.hidden_layer, bias=True, dropout=self.dropout)
 
         self._projection = nn.Sequential(nn.Linear(4 * 2 * self.hidden_size, self.hidden_size),
                                         nn.ReLU())
 
-        self._composition_lstm = Seq2SeqEncoder(self.hidden_size, self.hidden_size)
+        self._composition_lstm = Seq2SeqEncoder(self.hidden_size, self.hidden_size, num_layers=self.hidden_layer, bias=True, dropout=self.dropout)
         self._predict_fc = nn.Sequential(nn.Dropout(p=self.dropout),
                                             nn.Linear(4 * 2 * self.hidden_size, self.hidden_size),
                                             nn.Tanh(),
                                             nn.Dropout(p=self.dropout),
                                             nn.Linear(self.hidden_size, self.n_classes)
                                             )
-        self.apply(_init_esim_weights)
+        self.apply(init_model_weights)
 
     def forward(self,inputs):
         """
@@ -85,54 +86,3 @@ class ESIM(nn.Module):
         return logits
 
 
-
-
-class Seq2SeqEncoder(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers=2, bias=True, dropout=0.0, bidirectional=True):
-        super(Seq2SeqEncoder, self).__init__()
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.bias = bias
-        self.dropout = dropout
-        self.bidirectional = bidirectional
-        self._encoder = nn.LSTM(
-            input_size=self.input_size, 
-            hidden_size=self.hidden_size, 
-            num_layers=self.num_layers, 
-            bias=self.bias, 
-            bidirectional=self.bidirectional
-        )
-
-    def forward(self, sequences_batch, sequnces_lengths):
-        sorted_batch, sorted_length, _, restoration_idx = sort_by_seq_lens(sequences_batch, sequnces_lengths)
-        packed_batch = nn.utils.rnn.pack_padded_sequence(sorted_batch, sorted_length, batch_first=True)
-        outputs, _ = self._encoder(packed_batch) # hidden = None
-        outputs, _ = nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True) # [batch_size, max_len, dim]
-        # restore order
-        reorder_outputs = outputs.index_select(0, restoration_idx)
-        return reorder_outputs
-
-
-def _init_esim_weights(module):
-    """
-    Initialise the weights of the ESIM model.
-    """
-    if isinstance(module, nn.Linear):
-        nn.init.xavier_uniform_(module.weight.data)
-        nn.init.constant_(module.bias.data, 0.0)
-
-    elif isinstance(module, nn.LSTM):
-        nn.init.xavier_uniform_(module.weight_ih_l0.data)
-        nn.init.orthogonal_(module.weight_hh_l0.data)
-        nn.init.constant_(module.bias_ih_l0.data, 0.0)
-        nn.init.constant_(module.bias_hh_l0.data, 0.0)
-        hidden_size = module.bias_hh_l0.data.shape[0] // 4
-        module.bias_hh_l0.data[hidden_size:(2*hidden_size)] = 1.0
-
-        if (module.bidirectional):
-            nn.init.xavier_uniform_(module.weight_ih_l0_reverse.data)
-            nn.init.orthogonal_(module.weight_hh_l0_reverse.data)
-            nn.init.constant_(module.bias_ih_l0_reverse.data, 0.0)
-            nn.init.constant_(module.bias_hh_l0_reverse.data, 0.0)
-            module.bias_hh_l0_reverse.data[hidden_size:(2*hidden_size)] = 1.0
