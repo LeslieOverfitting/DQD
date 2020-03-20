@@ -1,0 +1,53 @@
+epoch[1/10] 
+Iter:   2000, Train loss: 0.386, Train acc: 79.69%, Dev loss  0.00668, Dev acc:  79.30%, Time: 0:01:54 *
+Iter:   4000, Train loss: 0.405, Train acc: 84.38%, Dev loss  0.00621, Dev acc:  81.06%, Time: 0:03:49 *
+epoch[2/10] 
+Iter:   6000, Train loss: 0.327, Train acc: 84.38%, Dev loss  0.00594, Dev acc:  82.15%, Time: 0:05:44 *
+Iter:   8000, Train loss: 0.335, Train acc: 85.94%, Dev loss  0.00577, Dev acc:  83.11%, Time: 0:07:38 *
+Iter:  10000, Train loss: 0.419, Train acc: 79.69%, Dev loss  0.00558, Dev acc:  83.37%, Time: 0:09:33 *
+epoch[3/10] 
+Iter:  12000, Train loss: 0.384, Train acc: 82.81%, Dev loss  0.00545, Dev acc:  83.99%, Time: 0:11:28 *
+Iter:  14000, Train loss: 0.286, Train acc: 90.62%, Dev loss  0.00539, Dev acc:  84.44%, Time: 0:13:23 *
+Iter:  16000, Train loss: 0.282, Train acc: 85.94%, Dev loss  0.00529, Dev acc:  84.63%, Time: 0:15:17 *
+epoch[4/10] 
+Iter:  18000, Train loss: 0.332, Train acc: 85.94%, Dev loss  0.0052, Dev acc:  84.85%, Time: 0:17:12 *
+Iter:  20000, Train loss: 0.266, Train acc: 92.19%, Dev loss  0.00512, Dev acc:  85.32%, Time: 0:19:07 *
+Iter:  22000, Train loss: 0.421, Train acc: 85.94%, Dev loss  0.00508, Dev acc:  85.62%, Time: 0:21:02 *
+epoch[5/10] 
+Iter:  24000, Train loss: 0.273, Train acc: 84.38%, Dev loss  0.00508, Dev acc:  85.48%, Time: 0:22:57 *
+Iter:  26000, Train loss:  0.21, Train acc: 92.19%, Dev loss  0.00502, Dev acc:  85.91%, Time: 0:24:52 *
+Iter:  28000, Train loss: 0.343, Train acc: 85.94%, Dev loss  0.00498, Dev acc:  85.85%, Time: 0:26:47 *
+epoch[6/10] 
+Iter:  30000, Train loss: 0.222, Train acc: 90.62%, Dev loss  0.00505, Dev acc:  85.76%, Time: 0:28:41  
+Iter:  32000, Train loss: 0.319, Train acc: 84.38%, Dev loss  0.00502, Dev acc:  85.88%, Time: 0:30:35  
+Iter:  34000, Train loss: 0.302, Train acc: 87.50%, Dev loss  0.00493, Dev acc:  86.28%, Time: 0:32:30 *
+epoch[7/10] 
+Iter:  36000, Train loss: 0.384, Train acc: 81.25%, Dev loss  0.00485, Dev acc:  86.44%, Time: 0:34:24 *
+Iter:  38000, Train loss: 0.258, Train acc: 90.62%, Dev loss  0.00492, Dev acc:  86.56%, Time: 0:36:18  
+epoch[8/10] 
+Iter:  40000, Train loss: 0.258, Train acc: 87.50%, Dev loss  0.0048, Dev acc:  86.73%, Time: 0:38:12 *
+Iter:  42000, Train loss: 0.232, Train acc: 90.62%, Dev loss  0.00494, Dev acc:  86.65%, Time: 0:40:06  
+Iter:  44000, Train loss: 0.346, Train acc: 87.50%, Dev loss  0.00482, Dev acc:  86.89%, Time: 0:42:00  
+epoch[9/10] 
+Iter:  46000, Train loss: 0.212, Train acc: 92.19%, Dev loss  0.00495, Dev acc:  86.88%, Time: 0:43:54  
+Iter:  48000, Train loss: 0.245, Train acc: 85.94%, Dev loss  0.00496, Dev acc:  86.64%, Time: 0:45:48  
+Iter:  50000, Train loss: 0.151, Train acc: 95.31%, Dev loss  0.00491, Dev acc:  86.91%, Time: 0:47:42  
+epoch[10/10] 
+Iter:  52000, Train loss: 0.204, Train acc: 95.31%, Dev loss  0.00483, Dev acc:  87.24%, Time: 0:49:36  
+Iter:  54000, Train loss: 0.162, Train acc: 92.19%, Dev loss  0.00504, Dev acc:  86.99%, Time: 0:51:30  
+Iter:  56000, Train loss: 0.233, Train acc: 85.94%, Dev loss  0.00495, Dev acc:  87.05%, Time: 0:53:24  
+Test Loss:0.0048, Test Acc:86.73%
+Precision, Recall and F1-Score...
+              precision    recall  f1-score   support
+
+           0     0.9014    0.8857    0.8935     25399
+           1     0.8124    0.8363    0.8242     15030
+
+    accuracy                         0.8673     40429
+   macro avg     0.8569    0.8610    0.8588     40429
+weighted avg     0.8683    0.8673    0.8677     40429
+
+Confusion Matrix...
+[[22496  2903]
+ [ 2460 12570]]
+Time usage: 0:00:12
